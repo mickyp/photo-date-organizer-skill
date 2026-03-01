@@ -1,0 +1,11 @@
+{
+  "skills": [
+    {
+      "name": "photo-date-organizer",
+      "files": [
+        "SKILL.md",
+        "scripts/organize_photos_by_date.py"
+      ]
+    }
+  ]
+}
