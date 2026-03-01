@@ -46,3 +46,7 @@ Apply changes:
 ```bash
 python3 .well-known/skills/photo-date-organizer/scripts/organize_photos_by_date.py "/path/to/2025/12" --mode month --apply
 ```
+
+If unsupported file formats are found in the scanned scope, the script writes:
+
+- `unsupported_file_formats.md` in the scan target directory

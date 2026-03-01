@@ -13,6 +13,7 @@ Use this skill when the user asks to organize image files by date in year/month 
 - Supported image extensions: `.jpg`, `.jpeg`, `.heic`, `.png` (case-insensitive).
 - Scan only files directly under `yyyy` or `yyyy/MM`.
 - Do not scan files inside any subdirectory under `yyyy` or `yyyy/MM`.
+- If unsupported file formats are found in scanned paths, generate `unsupported_file_formats.md` after scan completes.
 
 ## Safety Rules
 
@@ -80,6 +81,10 @@ Use this skill when the user asks to organize image files by date in year/month 
    - skipped_year_month_mismatch
    - name_collisions
    - skipped_scan_folders
+   - unsupported_files
+4. If `unsupported_files > 0`, create markdown report in scan target directory:
+   - `unsupported_file_formats.md`
+   - include extension summary and file list.
 
 ## Suggested Python Approach
 

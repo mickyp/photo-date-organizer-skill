@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import argparse
 import re
+from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 
@@ -11,6 +13,7 @@ DATE_RE = re.compile(r"^(\d{4})[-.](\d{2})[-.](\d{2})")
 YEAR_RE = re.compile(r"^\d{4}$")
 MONTH_RE = re.compile(r"^\d{2}$")
 PHOTO_EXTS = {".jpg", ".jpeg", ".heic", ".png"}
+UNSUPPORTED_REPORT_NAME = "unsupported_file_formats.md"
 
 
 @dataclass
@@ -22,6 +25,7 @@ class Stats:
     skipped_year_month_mismatch: int = 0
     name_collisions: int = 0
     skipped_scan_folders: list[str] = field(default_factory=list)
+    unsupported_files: list[str] = field(default_factory=list)
     sample_moves: list[str] = field(default_factory=list)
 
 
@@ -67,7 +71,10 @@ def process_month_files(month_dir: Path, year: str, month: str, apply: bool, sta
             continue
 
         if not is_photo_file(child):
+            if child.name == UNSUPPORTED_REPORT_NAME:
+                continue
             stats.skipped_non_photo += 1
+            stats.unsupported_files.append(str(child))
             continue
 
         m = DATE_RE.match(child.name)
@@ -113,8 +120,13 @@ def run_year_mode(year_dir: Path, apply: bool) -> Stats:
             else:
                 stats.skipped_scan_folders.append(str(child))
             continue
+        if child.name == UNSUPPORTED_REPORT_NAME:
+            continue
         if is_photo_file(child):
             year_files.append(child)
+        else:
+            stats.skipped_non_photo += 1
+            stats.unsupported_files.append(str(child))
 
     if year_files:
         for src in year_files:
@@ -150,6 +162,7 @@ def run_year_mode(year_dir: Path, apply: bool) -> Stats:
         stats.skipped_year_month_mismatch += month_stats.skipped_year_month_mismatch
         stats.name_collisions += month_stats.name_collisions
         stats.skipped_scan_folders.extend(month_stats.skipped_scan_folders)
+        stats.unsupported_files.extend(month_stats.unsupported_files)
         for item in month_stats.sample_moves:
             if len(stats.sample_moves) < 20:
                 stats.sample_moves.append(f"{month_dir.name}/{item}")
@@ -164,6 +177,47 @@ def run_month_mode(month_dir: Path, apply: bool) -> Stats:
     stats = Stats()
     process_month_files(month_dir, month_dir.parent.name, month_dir.name, apply, stats)
     return stats
+
+
+def write_unsupported_report(target: Path, stats: Stats) -> Path | None:
+    if not stats.unsupported_files:
+        return None
+
+    report_path = target / UNSUPPORTED_REPORT_NAME
+    unique_files = sorted(set(stats.unsupported_files))
+
+    def rel(path_str: str) -> str:
+        p = Path(path_str)
+        try:
+            return str(p.relative_to(target))
+        except ValueError:
+            return str(p)
+
+    ext_counter = Counter()
+    for p in unique_files:
+        ext = Path(p).suffix.lower() or "<no_extension>"
+        ext_counter[ext] += 1
+
+    lines: list[str] = []
+    lines.append("# Unsupported File Formats")
+    lines.append("")
+    lines.append(f"- Generated at: `{datetime.now().isoformat(timespec='seconds')}`")
+    lines.append(f"- Scan target: `{target}`")
+    lines.append(f"- Unsupported file count: **{len(unique_files)}**")
+    lines.append("")
+    lines.append("## Extension Summary")
+    lines.append("")
+    for ext, count in sorted(ext_counter.items(), key=lambda x: (x[0])):
+        lines.append(f"- `{ext}`: {count}")
+    lines.append("")
+    lines.append("## File List")
+    lines.append("")
+    for p in unique_files:
+        lines.append(f"- `{rel(p)}`")
+    lines.append("")
+
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    return report_path
 
 
 def main() -> int:
@@ -185,6 +239,8 @@ def main() -> int:
         print(str(err))
         return 1
 
+    report_path = write_unsupported_report(target, stats)
+
     print(f"mode={mode}")
     print(f"target={target}")
     print(f"apply={args.apply}")
@@ -195,6 +251,9 @@ def main() -> int:
     print(f"skipped_year_month_mismatch={stats.skipped_year_month_mismatch}")
     print(f"name_collisions={stats.name_collisions}")
     print(f"skipped_scan_folders={len(stats.skipped_scan_folders)}")
+    print(f"unsupported_files={len(set(stats.unsupported_files))}")
+    if report_path:
+        print(f"unsupported_report={report_path}")
 
     if stats.skipped_scan_folders:
         print("skipped_scan_folder_list:")
