@@ -32,7 +32,8 @@ Use this skill when the user asks to organize image files by date in year/month 
 - Parse only from filename prefix with either format:
   - `yyyy-MM-dd...`
   - `yyyy.MM.dd...`
-- Regex: `^(\d{4})[-.](\d{2})[-.](\d{2})`
+  - `yyyyMMdd...`
+- Regex: `^(\d{4})(?:[-.](\d{2})[-.](\d{2})|(\d{2})(\d{2}))`
 - If prefix date is missing, skip file.
 
 ## Scan Boundary Rules
@@ -57,14 +58,10 @@ Use this skill when the user asks to organize image files by date in year/month 
 
 ### B) Year mode (`yyyy`)
 
-1. Check whether there are supported photos directly under `yyyy`.
-2. If yes:
-   - For each photo, parse date and move to:
-     - `yyyy/MM/yyyy.MM.dd/<original-filename>`
-   - Create month folder first, then date folder.
-3. If no photos exist directly under `yyyy`:
-   - Inspect `yyyy/MM` directories.
-   - Apply month-mode logic on direct files of each month directory only.
+1. Process supported photos directly under `yyyy`.
+2. For each year-root photo, parse date and move to:
+   - `yyyy/MM/yyyy.MM.dd/<original-filename>`
+3. Then inspect `yyyy/MM` directories and apply month-mode logic on direct files of each month directory.
 
 ## Execution Pattern
 

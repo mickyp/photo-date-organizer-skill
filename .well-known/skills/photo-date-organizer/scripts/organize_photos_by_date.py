@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-DATE_RE = re.compile(r"^(\d{4})[-.](\d{2})[-.](\d{2})")
+DATE_RE = re.compile(r"^(\d{4})(?:[-.](\d{2})[-.](\d{2})|(\d{2})(\d{2}))")
 YEAR_RE = re.compile(r"^\d{4}$")
 MONTH_RE = re.compile(r"^\d{2}$")
 PHOTO_EXTS = {".jpg", ".jpeg", ".heic", ".png"}
@@ -41,6 +41,18 @@ def parse_mode(path: Path, mode: str) -> str:
 
 def is_photo_file(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in PHOTO_EXTS
+
+
+def parse_date_prefix(name: str) -> tuple[str, str, str] | None:
+    m = DATE_RE.match(name)
+    if not m:
+        return None
+    year = m.group(1)
+    month = m.group(2) or m.group(4)
+    day = m.group(3) or m.group(5)
+    if not month or not day:
+        return None
+    return year, month, day
 
 
 def safe_dest_path(dst: Path, stats: Stats) -> Path:
@@ -77,12 +89,12 @@ def process_month_files(month_dir: Path, year: str, month: str, apply: bool, sta
             stats.unsupported_files.append(str(child))
             continue
 
-        m = DATE_RE.match(child.name)
-        if not m:
+        parsed = parse_date_prefix(child.name)
+        if not parsed:
             stats.skipped_no_date += 1
             continue
 
-        yy, mm, dd = m.groups()
+        yy, mm, dd = parsed
         if yy != year or mm != month:
             stats.skipped_year_month_mismatch += 1
             continue
@@ -128,29 +140,27 @@ def run_year_mode(year_dir: Path, apply: bool) -> Stats:
             stats.skipped_non_photo += 1
             stats.unsupported_files.append(str(child))
 
-    if year_files:
-        for src in year_files:
-            m = DATE_RE.match(src.name)
-            if not m:
-                stats.skipped_no_date += 1
-                continue
+    for src in year_files:
+        parsed = parse_date_prefix(src.name)
+        if not parsed:
+            stats.skipped_no_date += 1
+            continue
 
-            yy, mm, dd = m.groups()
-            if yy != year:
-                stats.skipped_year_month_mismatch += 1
-                continue
+        yy, mm, dd = parsed
+        if yy != year:
+            stats.skipped_year_month_mismatch += 1
+            continue
 
-            month_dir = year_dir / mm
-            target_dir = month_dir / f"{year}.{mm}.{dd}"
-            dst = target_dir / src.name
-            dst = safe_dest_path(dst, stats)
-            record_sample(stats, src, dst, year_dir)
+        month_dir = year_dir / mm
+        target_dir = month_dir / f"{year}.{mm}.{dd}"
+        dst = target_dir / src.name
+        dst = safe_dest_path(dst, stats)
+        record_sample(stats, src, dst, year_dir)
 
-            if apply:
-                target_dir.mkdir(parents=True, exist_ok=True)
-                src.rename(dst)
-                stats.moved += 1
-        return stats
+        if apply:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            src.rename(dst)
+            stats.moved += 1
 
     for month_dir in month_dirs:
         month_stats = Stats()

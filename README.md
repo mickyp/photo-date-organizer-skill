@@ -2,6 +2,12 @@
 
 This repository packages the `photo-date-organizer` skill for OpenCode and is ready to publish on GitHub.
 
+Supported filename date prefixes:
+
+- `yyyy-MM-dd`
+- `yyyy.MM.dd`
+- `yyyyMMdd`
+
 ## Included Files
 
 - `.well-known/skills/index.json`: skill discovery index.
