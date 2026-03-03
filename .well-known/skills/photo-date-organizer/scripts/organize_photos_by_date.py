@@ -12,6 +12,7 @@ from pathlib import Path
 DATE_RE = re.compile(r"^(\d{4})(?:[-.](\d{2})[-.](\d{2})|(\d{2})(\d{2}))")
 YEAR_RE = re.compile(r"^\d{4}$")
 MONTH_RE = re.compile(r"^\d{2}$")
+COMPACT_MONTH_RE = re.compile(r"^(\d{4})(\d{2})$")
 PHOTO_EXTS = {".jpg", ".jpeg", ".heic", ".png"}
 UNSUPPORTED_REPORT_NAME = "unsupported_file_formats.md"
 
@@ -55,6 +56,10 @@ def parse_date_prefix(name: str) -> tuple[str, str, str] | None:
     return year, month, day
 
 
+def is_valid_month(mm: str) -> bool:
+    return mm.isdigit() and 1 <= int(mm) <= 12
+
+
 def safe_dest_path(dst: Path, stats: Stats) -> Path:
     if not dst.exists():
         return dst
@@ -74,8 +79,15 @@ def record_sample(stats: Stats, src: Path, dst: Path, base: Path) -> None:
         stats.sample_moves.append(f"{src.relative_to(base)} -> {dst.relative_to(base)}")
 
 
-def process_month_files(month_dir: Path, year: str, month: str, apply: bool, stats: Stats) -> None:
-    for child in sorted(month_dir.iterdir()):
+def process_month_files(
+    source_dir: Path,
+    target_month_dir: Path,
+    year: str,
+    month: str,
+    apply: bool,
+    stats: Stats,
+) -> None:
+    for child in sorted(source_dir.iterdir()):
         if child.is_dir():
             if child.name == "@eaDir":
                 continue
@@ -99,7 +111,7 @@ def process_month_files(month_dir: Path, year: str, month: str, apply: bool, sta
             stats.skipped_year_month_mismatch += 1
             continue
 
-        target_dir = month_dir / f"{year}.{month}.{dd}"
+        target_dir = target_month_dir / f"{year}.{month}.{dd}"
         dst = target_dir / child.name
 
         if child == dst:
@@ -107,7 +119,7 @@ def process_month_files(month_dir: Path, year: str, month: str, apply: bool, sta
             continue
 
         dst = safe_dest_path(dst, stats)
-        record_sample(stats, child, dst, month_dir)
+        record_sample(stats, child, dst, source_dir)
         if apply:
             target_dir.mkdir(parents=True, exist_ok=True)
             child.rename(dst)
@@ -122,13 +134,19 @@ def run_year_mode(year_dir: Path, apply: bool) -> Stats:
     year = year_dir.name
 
     year_files = []
-    month_dirs = []
+    month_dirs: dict[str, Path] = {}
+    compact_month_dirs: list[tuple[Path, str]] = []
     for child in sorted(year_dir.iterdir()):
         if child.is_dir():
             if child.name == "@eaDir":
                 continue
             if MONTH_RE.fullmatch(child.name):
-                month_dirs.append(child)
+                if is_valid_month(child.name):
+                    month_dirs[child.name] = child
+                else:
+                    stats.skipped_scan_folders.append(str(child))
+            elif (m := COMPACT_MONTH_RE.fullmatch(child.name)) and m.group(1) == year and is_valid_month(m.group(2)):
+                compact_month_dirs.append((child, m.group(2)))
             else:
                 stats.skipped_scan_folders.append(str(child))
             continue
@@ -162,9 +180,23 @@ def run_year_mode(year_dir: Path, apply: bool) -> Stats:
             src.rename(dst)
             stats.moved += 1
 
-    for month_dir in month_dirs:
+    month_jobs: list[tuple[str, Path, Path, str]] = []
+    for mm, month_dir in sorted(month_dirs.items()):
+        month_jobs.append((month_dir.name, month_dir, month_dir, mm))
+
+    for compact_dir, mm in compact_month_dirs:
+        normalized_month_dir = year_dir / mm
+        if apply and not normalized_month_dir.exists():
+            compact_dir.rename(normalized_month_dir)
+            month_dirs[mm] = normalized_month_dir
+            month_jobs.append((normalized_month_dir.name, normalized_month_dir, normalized_month_dir, mm))
+            continue
+
+        month_jobs.append((compact_dir.name, compact_dir, normalized_month_dir, mm))
+
+    for label, source_dir, target_month_dir, mm in month_jobs:
         month_stats = Stats()
-        process_month_files(month_dir, year, month_dir.name, apply, month_stats)
+        process_month_files(source_dir, target_month_dir, year, mm, apply, month_stats)
         stats.moved += month_stats.moved
         stats.already_ok += month_stats.already_ok
         stats.skipped_non_photo += month_stats.skipped_non_photo
@@ -175,7 +207,7 @@ def run_year_mode(year_dir: Path, apply: bool) -> Stats:
         stats.unsupported_files.extend(month_stats.unsupported_files)
         for item in month_stats.sample_moves:
             if len(stats.sample_moves) < 20:
-                stats.sample_moves.append(f"{month_dir.name}/{item}")
+                stats.sample_moves.append(f"{label}/{item}")
 
     return stats
 
@@ -185,7 +217,7 @@ def run_month_mode(month_dir: Path, apply: bool) -> Stats:
         raise ValueError("現在不是 月份的檔案目錄")
 
     stats = Stats()
-    process_month_files(month_dir, month_dir.parent.name, month_dir.name, apply, stats)
+    process_month_files(month_dir, month_dir, month_dir.parent.name, month_dir.name, apply, stats)
     return stats
 
 

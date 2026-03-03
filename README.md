@@ -8,6 +8,12 @@ Supported filename date prefixes:
 - `yyyy.MM.dd`
 - `yyyyMMdd`
 
+Supported scan roots in year mode:
+
+- `yyyy`
+- `yyyy/MM`
+- `yyyy/yyyyMM` (auto-normalized to `yyyy/MM`)
+
 ## Included Files
 
 - `.well-known/skills/index.json`: skill discovery index.

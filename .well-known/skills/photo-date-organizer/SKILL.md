@@ -40,9 +40,13 @@ Use this skill when the user asks to organize image files by date in year/month 
 
 1. In year mode (`yyyy`), scan only direct files in `yyyy`.
 2. If year mode falls back to month scanning, scan only direct files in each `yyyy/MM`.
-3. In month mode (`yyyy/MM`), scan only direct files in that month directory.
-4. Any subdirectory under `yyyy` or `yyyy/MM` is excluded from scanning and must be reported in `skipped_scan_folders`.
-5. Example excluded paths:
+3. In year mode, if a compact month directory `yyyy/yyyyMM` is found (e.g., `2021/202101`), scan its direct files too.
+4. Compact month directory normalization:
+   - normalize `yyyy/yyyyMM` to `yyyy/MM` (e.g., `2021/202101` -> `2021/01`)
+   - if `yyyy/MM` already exists, process `yyyyMM` files and move them into `yyyy/MM/yyyy.MM.dd`
+5. In month mode (`yyyy/MM`), scan only direct files in that month directory.
+6. Any subdirectory under scan roots is excluded from scanning and must be reported in `skipped_scan_folders`.
+7. Example excluded paths:
    - `2025/2025.12海邊玩/2021.11.11.jpg`
    - `2025/12/很好玩/2022.01.01.heic`
 
@@ -62,6 +66,7 @@ Use this skill when the user asks to organize image files by date in year/month 
 2. For each year-root photo, parse date and move to:
    - `yyyy/MM/yyyy.MM.dd/<original-filename>`
 3. Then inspect `yyyy/MM` directories and apply month-mode logic on direct files of each month directory.
+4. Also inspect compact month directories `yyyy/yyyyMM`; normalize to `yyyy/MM` and process using the same rules.
 
 ## Execution Pattern
 
